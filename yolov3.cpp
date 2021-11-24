@@ -188,7 +188,7 @@ int main() {
     // session input pretreat
     MNN::Tensor *input_tensor = my_interpreter->getSessionInput(my_session, "input");
     my_interpreter->resizeTensor(input_tensor, {1,3,416,416});
-    std::string imagesTxt = "/mnt/sdb1/Data/data4/902_20210705_i18R/images.txt";
+    std::string imagesTxt = "/mnt/sdb2/DATA/x06/remap/images.txt";
     std::vector<std::string> imageNameList;
     std::vector<std::string> lidarNameList;
 
@@ -232,8 +232,8 @@ int main() {
 
         // filter bounding boxes by threshold(0.4)
         for (int num = 0; num < boxes; num++) {
-            std::vector<float>::const_iterator firstConfs = output_vector_confs.begin() + num * class_nums+class_nums;
-            std::vector<float>::const_iterator lastConfs = output_vector_confs.begin() + num * class_nums + class_nums+class_nums;
+            std::vector<float>::const_iterator firstConfs = output_vector_confs.begin() + num * class_nums;
+            std::vector<float>::const_iterator lastConfs = output_vector_confs.begin() + num * class_nums + class_nums;
             std::vector<float> prob_vector(firstConfs, lastConfs);
             int max_id=-1;
             float max_prob = -10000000000000000.0;
