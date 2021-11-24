@@ -7,17 +7,27 @@
 #include <iostream>
 #include "ImageProcess.hpp"
 #include <ctime>
+#include <unistd.h>
+#include "fstream"
 
+#include <string.h>
+#include <opencv2/highgui.hpp>
+#define ERROR_PRINT(x) std::cout << "\033[31m" << (x) << "\033[0m" << std::endl
 
 int class_nums = 4;
 float prob_threshold = 0.6;
-float nms_threshold = 0.6;
+float nms_threshold = 0.2;
+int boxes=10647;
 
 struct Object {
     cv::Rect_<float> rect;
     int label;
     float prob;
 };
+
+static std::vector<std::string> class_names = {
+        "person", "escalator", "escalator_handrails", "person_dummy",
+        };
 
 static cv::Mat draw_objects(const cv::Mat &rgb, const std::vector<Object> &objects) {
 
@@ -32,7 +42,7 @@ static cv::Mat draw_objects(const cv::Mat &rgb, const std::vector<Object> &objec
         cv::rectangle(image, obj.rect, cv::Scalar(255, 0, 0));
 
         char text[256];
-        sprintf(text, "%s %.1f%%", "a", obj.prob * 100);
+        sprintf(text, "%s %.1f%%", class_names[obj.label].c_str(), obj.prob * 100);
 
         int baseLine = 0;
         cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
@@ -57,6 +67,27 @@ static cv::Mat draw_objects(const cv::Mat &rgb, const std::vector<Object> &objec
 // sort vector of vectors by vectors' last value(bounding box confidence)
 bool orderCriteria(std::vector<float> i, std::vector<float> j) { return (i.at(4) > j.at(4)); }
 
+void ReadFile(std::string srcFile, std::vector<std::string> &image_files) {
+
+    if (not access(srcFile.c_str(), 0) == 0) {
+        ERROR_PRINT("no such File (" + srcFile + ")");
+        return;
+    }
+
+    std::ifstream fin(srcFile.c_str());
+
+    if (!fin.is_open()) {
+        ERROR_PRINT("read file error (" + srcFile + ")");
+        exit(0);
+    }
+
+    std::string s;
+    while (getline(fin, s)) {
+        image_files.push_back(s);
+    }
+
+    fin.close();
+}
 // intersection of union calculation
 static float compute_iou(std::vector<float> vector1, std::vector<float> vector2) {
     float x10 = vector1.at(0);
@@ -140,7 +171,7 @@ std::vector<int> find_boundary_point(cv::Mat img, cv::Point ptCenter, cv::Point 
 }
 
 int main() {
-    const std::string mnn_path = "/home/fandong/Code/MNN-yolov3/yolov3_pruneV50_v1.mnn";
+    const std::string mnn_path = "/home/fandong/Code/MNN-yolov3/yolov3_nnnnnbbbbb.mnn";
     std::shared_ptr<MNN::Interpreter> my_interpreter = std::shared_ptr<MNN::Interpreter>(
             MNN::Interpreter::createFromFile(mnn_path.c_str()));
     // config
@@ -156,111 +187,124 @@ int main() {
 
     // session input pretreat
     MNN::Tensor *input_tensor = my_interpreter->getSessionInput(my_session, "input");
+    my_interpreter->resizeTensor(input_tensor, {1,3,416,416});
+    std::string imagesTxt = "/mnt/sdb1/Data/data4/902_20210705_i18R/images.txt";
+    std::vector<std::string> imageNameList;
+    std::vector<std::string> lidarNameList;
 
-    cv::Mat imgin = cv::imread("/home/fandong/Code/MNN-yolov3/0.jpg");
-    cv::Mat frame = cv::Mat(imgin.rows, imgin.cols, CV_8UC3, imgin.data);
-    cv::Mat image;
-    cv::resize(frame, image, cv::Size(416, 416), cv::INTER_LINEAR);
+    ReadFile(imagesTxt, imageNameList);
+    const size_t size = imageNameList.size();
+    for (size_t imgid = 0; imgid < size; ++imgid) {
 
-    // pass image to model(rgb format, pixels minus by 0 and then divided by 255.0)
-    const float mean_vals[3] = {0.0, 0.0, 0.0};
-    const float norm_vals[3] = {1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0};
-    std::shared_ptr<MNN::CV::ImageProcess> pretreat(
-            MNN::CV::ImageProcess::create(MNN::CV::RGB, MNN::CV::RGB, mean_vals, 3, norm_vals, 3));
-    pretreat->convert(image.data, 416, 416, image.step[0], input_tensor);
-    my_interpreter->runSession(my_session);
+        auto imageName = imageNameList.at(imgid);
 
-    // "boxes" -- [batch, num, 1, 4] ; "confs" -- [batch, num, num_classes]
-    auto output_tensor_boxes = my_interpreter->getSessionOutput(my_session, "boxes");
-    auto output_tensor_confs = my_interpreter->getSessionOutput(my_session, "confs");
 
-    // convert arrays to vectors
-    float *output_array_boxes = output_tensor_boxes->host<float>();
-    float *output_array_confs = output_tensor_confs->host<float>();
+        cv::Mat imgin = cv::imread(imageName);
+        cv::Mat frame = cv::Mat(imgin.rows, imgin.cols, CV_8UC3, imgin.data);
+        cv::Mat image;
+        cv::resize(frame, image, cv::Size(416, 416), cv::INTER_LINEAR);
 
-    int boxes=2400;
-    std::vector<float> output_vector_boxes{output_array_boxes, output_array_boxes + boxes * 4};
-    std::vector<float> output_vector_confs{output_array_confs, output_array_confs + boxes * class_nums};
+        // pass image to model(rgb format, pixels minus by 0 and then divided by 255.0)
+        const float mean_vals[3] = {0.0, 0.0, 0.0};
+        const float norm_vals[3] = {1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0};
+        std::shared_ptr<MNN::CV::ImageProcess> pretreat(
+                MNN::CV::ImageProcess::create(MNN::CV::RGB, MNN::CV::RGB, mean_vals, 3, norm_vals, 3));
+        pretreat->convert(image.data, 416, 416, image.step[0], input_tensor);
+        my_interpreter->runSession(my_session);
 
-    std::vector<std::vector<std::vector<float>>> vec(class_nums);
-    std::cout << "vec.size(): " << vec.size() << std::endl;
-    std::cout << std::endl;
-    std::cout << "bounding boxes" << std::endl;
+        // "boxes" -- [batch, num, 1, 4] ; "confs" -- [batch, num, num_classes]
+        auto output_tensor_boxes = my_interpreter->getSessionOutput(my_session, "boxes");
 
-    // filter bounding boxes by threshold(0.4)
-    for (int num = 0; num < boxes; num++) {
-        std::vector<float>::const_iterator firstConfs = output_vector_confs.begin() + num * class_nums;
-        std::vector<float>::const_iterator lastConfs = output_vector_confs.begin() + num * class_nums + class_nums;
-        std::vector<float> prob_vector(firstConfs, lastConfs);
-        int max_id;
-        float max_prob = -10000000000000000.0;
-        for (int cls = 0; cls < class_nums; cls++) {
-            if (prob_vector.at(cls) > max_prob) {
-                max_id = cls;
-                max_prob = prob_vector.at(cls);
+        auto output_tensor_confs = my_interpreter->getSessionOutput(my_session, "confs");
+
+        // convert arrays to vectors
+        float *output_array_boxes = output_tensor_boxes->host<float>();
+        float *output_array_confs = output_tensor_confs->host<float>();
+
+
+        std::vector<float> output_vector_boxes{output_array_boxes, output_array_boxes + boxes * 4};
+        std::vector<float> output_vector_confs{output_array_confs, output_array_confs + boxes * class_nums+class_nums};
+
+        std::vector<std::vector<std::vector<float>>> vec(class_nums);
+        std::cout << "vec.size(): " << vec.size() << std::endl;
+        std::cout << std::endl;
+        std::cout << "bounding boxes" << std::endl;
+
+        // filter bounding boxes by threshold(0.4)
+        for (int num = 0; num < boxes; num++) {
+            std::vector<float>::const_iterator firstConfs = output_vector_confs.begin() + num * class_nums+class_nums;
+            std::vector<float>::const_iterator lastConfs = output_vector_confs.begin() + num * class_nums + class_nums+class_nums;
+            std::vector<float> prob_vector(firstConfs, lastConfs);
+            int max_id=-1;
+            float max_prob = -10000000000000000.0;
+            for (int cls = 0; cls < class_nums; cls++) {
+                if (prob_vector.at(cls) > max_prob) {
+                    max_id = cls;
+                    max_prob = prob_vector.at(cls);
+                }
+            }
+
+            if (max_prob > prob_threshold) {
+                std::vector<float>::const_iterator firstBoxes = output_vector_boxes.begin() + num * 4;
+                std::vector<float>::const_iterator lastBoxes = output_vector_boxes.begin() + num * 4 + 4;
+                std::vector<float> coord_vector(firstBoxes, lastBoxes);
+                coord_vector.push_back(max_prob);
+
+                for (int idx = 0; idx < 5; idx++) {
+                    std::cout << coord_vector.at(idx) << " ";
+
+                }
+                std::cout << std::endl;
+                vec.at(max_id).push_back(coord_vector);
             }
         }
 
-        if (max_prob > prob_threshold) {
-            std::vector<float>::const_iterator firstBoxes = output_vector_boxes.begin() + num * 4;
-            std::vector<float>::const_iterator lastBoxes = output_vector_boxes.begin() + num * 4 + 4;
-            std::vector<float> coord_vector(firstBoxes, lastBoxes);
-            coord_vector.push_back(max_prob);
-
-            for (int idx = 0; idx < 5; idx++) {
-                std::cout << coord_vector.at(idx) << " ";
-
-            }
-            std::cout << std::endl;
-            vec.at(max_id).push_back(coord_vector);
-        }
-    }
-
-    // nms
-    for (int cls = 0; cls < class_nums; cls++) {
-        if (vec.at(cls).size() == 0) {
-            continue;
-        } else {
-            // sort by probability
-            std::sort(vec.at(cls).begin(), vec.at(cls).end(), orderCriteria);
-            // from https://blog.csdn.net/avideointerfaces/article/details/88551325
-            int updated_size = vec.at(cls).size();
-            for (int i = 0; i < updated_size; i++) {
-                for (int j = i + 1; j < updated_size; j++) {
-                    float score = compute_iou(vec.at(cls).at(i), vec.at(cls).at(j));
-                    if (abs(score) >= 0.2) {
-                        vec.at(cls).erase(vec.at(cls).begin() + j);
-                        j = j - 1;
-                        updated_size = vec.at(cls).size();
+        // nms
+        for (int cls_nms = 0; cls_nms < class_nums; cls_nms++) {
+            if (vec.at(cls_nms).size() == 0) {
+                continue;
+            } else {
+                // sort by probability
+                std::sort(vec.at(cls_nms).begin(), vec.at(cls_nms).end(), orderCriteria);
+                // from https://blog.csdn.net/avideointerfaces/article/details/88551325
+                int updated_size = vec.at(cls_nms).size();
+                for (int i = 0; i < updated_size; i++) {
+                    for (int j = i + 1; j < updated_size; j++) {
+                        float score = compute_iou(vec.at(cls_nms).at(i), vec.at(cls_nms).at(j));
+                        if (abs(score) >= nms_threshold) {
+    //                        std::cout
+                            vec.at(cls_nms).erase(vec.at(cls_nms).begin() + j);
+                            j = j - 1;
+                            updated_size = vec.at(cls_nms).size();
+                        }
                     }
                 }
             }
         }
-    }
 
-    std::vector<Object> objects;
-    for (int cls = 0; cls < class_nums; cls++)
-    {
-        if (vec.at(cls).size() == 0)
+        std::vector<Object> objects;
+        for (int cls_s = 0; cls_s < class_nums; cls_s++)
         {
-            continue;
-        } else
-        {
-            for (int i = 0; i < vec.at(cls).size(); i++)
+            if (vec.at(cls_s).size() == 0)
             {
+                continue;
+            } else
+            {
+                for (int i = 0; i < vec.at(cls_s).size(); i++)
+                {
 
-                Object obj;
-                obj.rect = cv::Rect_<float>(vec.at(cls).at(i).at(0) * 640, vec.at(cls).at(i).at(1) * 400,
-                                            (vec.at(cls).at(i).at(2) - vec.at(cls).at(i).at(0)) * 640,
-                                            (vec.at(cls).at(i).at(3) - vec.at(cls).at(i).at(1)) * 400);
-                obj.label = cls;
-                obj.prob = vec.at(cls).at(i).at(4);
-                objects.push_back(obj);
+                    Object obj;
+                    obj.rect = cv::Rect_<float>(vec.at(cls_s).at(i).at(0) * 640, vec.at(cls_s).at(i).at(1) * 400,
+                                                (vec.at(cls_s).at(i).at(2) - vec.at(cls_s).at(i).at(0)) * 640,
+                                                (vec.at(cls_s).at(i).at(3) - vec.at(cls_s).at(i).at(1)) * 400);
+                    obj.label = cls_s;
+                    obj.prob = vec.at(cls_s).at(i).at(4);
+                    objects.push_back(obj);
 
+                }
             }
         }
-    }
-    auto imgshow = draw_objects(frame, objects);
-    cv::imshow("w", imgshow);
-    cv::waitKey(-1);
-}
+        auto imgshow = draw_objects(frame, objects);
+        cv::imshow("w", imgshow);
+        cv::waitKey(-1);
+}}

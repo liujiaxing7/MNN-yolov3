@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10.2)
 project(Demo)
 
 set(CMAKE_CXX_STANDARD 14)
-SET( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../../)
+#SET( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../../)
 
 set(MNN_DIR /home/fandong/Code/MNN)
 include_directories(/home/fandong/Code/MNN/3rd_party/imageHelper)
