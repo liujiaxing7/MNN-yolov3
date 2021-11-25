@@ -15,8 +15,8 @@
 #define ERROR_PRINT(x) std::cout << "\033[31m" << (x) << "\033[0m" << std::endl
 
 int class_nums = 4;
-float prob_threshold = 0.6;
-float nms_threshold = 0.2;
+float prob_threshold = 0.25;
+float nms_threshold = 0.45;
 int boxes=10647;
 
 struct Object {
@@ -171,7 +171,7 @@ std::vector<int> find_boundary_point(cv::Mat img, cv::Point ptCenter, cv::Point 
 }
 
 int main() {
-    const std::string mnn_path = "/home/fandong/Code/MNN-yolov3/yolov3_nnnnnbbbbb.mnn";
+    const std::string mnn_path = "/home/fandong/Code/MNN-yolov3/yolov3_last_v103.mnn";
     std::shared_ptr<MNN::Interpreter> my_interpreter = std::shared_ptr<MNN::Interpreter>(
             MNN::Interpreter::createFromFile(mnn_path.c_str()));
     // config
@@ -266,13 +266,12 @@ int main() {
             } else {
                 // sort by probability
                 std::sort(vec.at(cls_nms).begin(), vec.at(cls_nms).end(), orderCriteria);
-                // from https://blog.csdn.net/avideointerfaces/article/details/88551325
+
                 int updated_size = vec.at(cls_nms).size();
                 for (int i = 0; i < updated_size; i++) {
                     for (int j = i + 1; j < updated_size; j++) {
                         float score = compute_iou(vec.at(cls_nms).at(i), vec.at(cls_nms).at(j));
-                        if (abs(score) >= nms_threshold) {
-    //                        std::cout
+                        if (score >= nms_threshold) {
                             vec.at(cls_nms).erase(vec.at(cls_nms).begin() + j);
                             j = j - 1;
                             updated_size = vec.at(cls_nms).size();
