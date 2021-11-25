@@ -305,5 +305,5 @@ int main() {
         }
         auto imgshow = draw_objects(frame, objects);
         cv::imshow("w", imgshow);
-        cv::waitKey(-1);
+        cv::waitKey(100);
 }}
