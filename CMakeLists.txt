@@ -22,7 +22,7 @@ include_directories(${MNN_ROOT})
 
 include_directories(${OpenCL_INCLUDE_DIRS})
 
-add_executable(yolo.out yolov3.cpp)
+add_executable(yolo.out yolov3-gpu.cpp)
 target_link_libraries(yolo.out ${MNN_DIR})
 target_link_libraries(yolo.out ${MNN_DIR}/build-gpu/libMNN.so)
 

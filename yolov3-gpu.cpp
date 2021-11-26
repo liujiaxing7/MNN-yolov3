@@ -329,7 +329,7 @@ int main(int argc, char **argv) {
         }
         auto imgshow = draw_objects(frame, objects);
         cv::imshow("w", imgshow);
-        cv::waitKey(1);
+        cv::waitKey(100);
     }
 }
 
