@@ -15,7 +15,7 @@
 
 #define ERROR_PRINT(x) std::cout << "\033[31m" << (x) << "\033[0m" << std::endl
 
-int class_nums = 4;
+int class_nums = -1;
 float prob_threshold = 0.25;
 float nms_threshold = 0.45;
 int boxes = 10647;
@@ -26,8 +26,10 @@ struct Object {
     float prob;
 };
 
+void read_classes(char *string);
+
 static std::vector<std::string> class_names = {
-        "person", "escalator", "escalator_handrails", "person_dummy",
+
 };
 
 static cv::Mat draw_objects(const cv::Mat &rgb, const std::vector<Object> &objects) {
@@ -172,10 +174,19 @@ std::vector<int> find_boundary_point(cv::Mat img, cv::Point ptCenter, cv::Point 
     return pointBoundary;
 }
 
-int main() {
-    const std::string mnn_path = "/home/fandong/Code/MNN-yolov3/yolov3-gpu.mnn";
+int main(int argc, char **argv) {
+
+    if (argc < 3) {
+        std::cout << "modelpath: mnnpath:\n"
+                  << "data_path: images.txt\n"
+                  << "classpath:: classes.txt" << std::endl;
+        return -1;
+    }
+
+    const std::string mnn_path = argv[1];
     std::shared_ptr<MNN::Interpreter> my_interpreter = std::shared_ptr<MNN::Interpreter>(
             MNN::Interpreter::createFromFile(mnn_path.c_str()));
+
     // config
     MNN::ScheduleConfig config;
     int num_thread = 4;
@@ -183,18 +194,23 @@ int main() {
     MNN::BackendConfig backendConfig;
     backendConfig.precision = (MNN::BackendConfig::PrecisionMode) 2;
     config.backendConfig = &backendConfig;
-
     int forward = MNN_FORWARD_OPENCL;
     config.type = static_cast<MNNForwardType>(forward);
+
+
     // create session
     MNN::Session *my_session = my_interpreter->createSession(config);
+
 
     // session input pretreat
     MNN::Tensor *input_tensor = my_interpreter->getSessionInput(my_session, "input");
     my_interpreter->resizeTensor(input_tensor, {1, 3, 416, 416});
-    std::string imagesTxt = "/mnt/sdb1/Data/data4/902_20210705_i18R/images.txt";
+
+    std::string imagesTxt = argv[2];
     std::vector<std::string> imageNameList;
     std::vector<std::string> lidarNameList;
+
+    read_classes(argv[3]);
 
     ReadFile(imagesTxt, imageNameList);
     const size_t size = imageNameList.size();
@@ -300,9 +316,10 @@ int main() {
                 for (int i = 0; i < vec.at(cls_s).size(); i++) {
 
                     Object obj;
-                    obj.rect = cv::Rect_<float>(vec.at(cls_s).at(i).at(0) * 640, vec.at(cls_s).at(i).at(1) * 400,
-                                                (vec.at(cls_s).at(i).at(2) - vec.at(cls_s).at(i).at(0)) * 640,
-                                                (vec.at(cls_s).at(i).at(3) - vec.at(cls_s).at(i).at(1)) * 400);
+                    obj.rect = cv::Rect_<float>(vec.at(cls_s).at(i).at(0) * imgin.cols,
+                                                vec.at(cls_s).at(i).at(1) * imgin.rows,
+                                                (vec.at(cls_s).at(i).at(2) - vec.at(cls_s).at(i).at(0)) * imgin.cols,
+                                                (vec.at(cls_s).at(i).at(3) - vec.at(cls_s).at(i).at(1)) * imgin.rows);
                     obj.label = cls_s;
                     obj.prob = vec.at(cls_s).at(i).at(4);
                     objects.push_back(obj);
@@ -312,6 +329,18 @@ int main() {
         }
         auto imgshow = draw_objects(frame, objects);
         cv::imshow("w", imgshow);
-        cv::waitKey(100);
+        cv::waitKey(1);
     }
+}
+
+void read_classes(char *string) {
+    std::fstream fin;
+    fin.open(string, std::ios::in);
+    std::string tmp;
+    while (getline(fin, tmp)) {
+        class_names.push_back(tmp);
+
+    }
+    class_nums = class_names.size();
+
 }
