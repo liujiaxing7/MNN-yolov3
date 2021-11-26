@@ -12,12 +12,13 @@
 
 #include <string.h>
 #include <opencv2/highgui.hpp>
+
 #define ERROR_PRINT(x) std::cout << "\033[31m" << (x) << "\033[0m" << std::endl
 
 int class_nums = 4;
 float prob_threshold = 0.25;
 float nms_threshold = 0.45;
-int boxes=10647;
+int boxes = 10647;
 
 struct Object {
     cv::Rect_<float> rect;
@@ -88,6 +89,7 @@ void ReadFile(std::string srcFile, std::vector<std::string> &image_files) {
 
     fin.close();
 }
+
 // intersection of union calculation
 static float compute_iou(std::vector<float> vector1, std::vector<float> vector2) {
     float x10 = vector1.at(0);
@@ -183,14 +185,13 @@ int main() {
     config.backendConfig = &backendConfig;
 
     int forward = MNN_FORWARD_OPENCL;
-//    config.numThread = threads;
-    config.type      = static_cast<MNNForwardType>(forward);
+    config.type = static_cast<MNNForwardType>(forward);
     // create session
     MNN::Session *my_session = my_interpreter->createSession(config);
 
     // session input pretreat
     MNN::Tensor *input_tensor = my_interpreter->getSessionInput(my_session, "input");
-    my_interpreter->resizeTensor(input_tensor, {1,3,416,416});
+    my_interpreter->resizeTensor(input_tensor, {1, 3, 416, 416});
     std::string imagesTxt = "/mnt/sdb1/Data/data4/902_20210705_i18R/images.txt";
     std::vector<std::string> imageNameList;
     std::vector<std::string> lidarNameList;
@@ -232,7 +233,8 @@ int main() {
 
 
         std::vector<float> output_vector_boxes{output_array_boxes, output_array_boxes + boxes * 4};
-        std::vector<float> output_vector_confs{output_array_confs, output_array_confs + boxes * class_nums+class_nums};
+        std::vector<float> output_vector_confs{output_array_confs,
+                                               output_array_confs + boxes * class_nums + class_nums};
 
         std::vector<std::vector<std::vector<float>>> vec(class_nums);
         std::cout << "vec.size(): " << vec.size() << std::endl;
@@ -244,7 +246,7 @@ int main() {
             std::vector<float>::const_iterator firstConfs = output_vector_confs.begin() + num * class_nums;
             std::vector<float>::const_iterator lastConfs = output_vector_confs.begin() + num * class_nums + class_nums;
             std::vector<float> prob_vector(firstConfs, lastConfs);
-            int max_id=-1;
+            int max_id = -1;
             float max_prob = -10000000000000000.0;
             for (int cls = 0; cls < class_nums; cls++) {
                 if (prob_vector.at(cls) > max_prob) {
@@ -291,15 +293,11 @@ int main() {
         }
 
         std::vector<Object> objects;
-        for (int cls_s = 0; cls_s < class_nums; cls_s++)
-        {
-            if (vec.at(cls_s).size() == 0)
-            {
+        for (int cls_s = 0; cls_s < class_nums; cls_s++) {
+            if (vec.at(cls_s).size() == 0) {
                 continue;
-            } else
-            {
-                for (int i = 0; i < vec.at(cls_s).size(); i++)
-                {
+            } else {
+                for (int i = 0; i < vec.at(cls_s).size(); i++) {
 
                     Object obj;
                     obj.rect = cv::Rect_<float>(vec.at(cls_s).at(i).at(0) * 640, vec.at(cls_s).at(i).at(1) * 400,
@@ -315,4 +313,5 @@ int main() {
         auto imgshow = draw_objects(frame, objects);
         cv::imshow("w", imgshow);
         cv::waitKey(100);
-    }}
+    }
+}
