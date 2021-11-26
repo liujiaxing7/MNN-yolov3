@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.10.2)
 project(Demo)
 
 set(CMAKE_CXX_STANDARD 14)
-#SET( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../../)
 
 set(MNN_DIR /home/fandong/Downloads/MNN-1.1.2)
 include_directories(${MNN_DIR}/3rd_party/imageHelper)
@@ -19,8 +18,7 @@ LINK_DIRECTORIES(${MNN_DIR}/build-gpu)
 
 set(MNN_ROOT ${MNN_DIR}/include )
 include_directories(${MNN_ROOT})
-# add following lines
-#aux_source_directory(./utils DIR_LIB_SRCS1)
+
 
 include_directories(${OpenCL_INCLUDE_DIRS})
 
