@@ -9,7 +9,7 @@
 #include <ctime>
 #include <unistd.h>
 #include "fstream"
-
+#include <chrono>
 #include <string.h>
 #include <opencv2/highgui.hpp>
 
@@ -182,6 +182,7 @@ int main(int argc, char **argv) {
                   << "classpath:: classes.txt" << std::endl;
         return -1;
     }
+    auto start = std::chrono::steady_clock::now();
 
     const std::string mnn_path = argv[1];
     std::shared_ptr<MNN::Interpreter> my_interpreter = std::shared_ptr<MNN::Interpreter>(
@@ -327,10 +328,13 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        auto imgshow = draw_objects(frame, objects);
-        cv::imshow("w", imgshow);
-        cv::waitKey(100);
+//        auto imgshow = draw_objects(frame, objects);
+//        cv::imshow("w", imgshow);
+//        cv::waitKey(100);
     }
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed1 = end - start1;
+    std::cout << "data to gpu:" << elapsed1.count() << " s, ";
 }
 
 void read_classes(char *string) {
