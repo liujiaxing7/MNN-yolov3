@@ -181,16 +181,17 @@ int main(int argc, char **argv) {
                   << "classpath:: classes.txt" << std::endl;
         return -1;
     }
-    auto start = std::chrono::steady_clock::now();
+    auto start_load = std::chrono::steady_clock::now();
+
+
 
     const std::string mnn_path = argv[1];
     std::shared_ptr<MNN::Interpreter> my_interpreter = std::shared_ptr<MNN::Interpreter>(
             MNN::Interpreter::createFromFile(mnn_path.c_str()));
 
-
     // config
     MNN::ScheduleConfig config;
-    int num_thread = 4;
+    int num_thread = 1;
     config.numThread = num_thread;
     MNN::BackendConfig backendConfig;
     backendConfig.precision = (MNN::BackendConfig::PrecisionMode) 2;
@@ -198,6 +199,9 @@ int main(int argc, char **argv) {
 
     // create session
     MNN::Session *my_session = my_interpreter->createSession(config);
+    auto end_load = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed_load = end_load - start_load;
+    std::cout << "load time :" << elapsed_load.count() << " s, ";
 
     // session input pretreat
     MNN::Tensor *input_tensor = my_interpreter->getSessionInput(my_session, "input");
@@ -213,20 +217,30 @@ int main(int argc, char **argv) {
 
         auto imageName = imageNameList.at(imgid);
 
-
         cv::Mat imgin = cv::imread(imageName);
         cv::Mat frame = cv::Mat(imgin.rows, imgin.cols, CV_8UC3, imgin.data);
         cv::Mat image;
         cv::resize(frame, image, cv::Size(416, 416), cv::INTER_LINEAR);
 
+        auto start_togpu = std::chrono::steady_clock::now();
         // pass image to model(rgb format, pixels minus by 0 and then divided by 255.0)
         const float mean_vals[3] = {0.0, 0.0, 0.0};
         const float norm_vals[3] = {1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0};
         std::shared_ptr<MNN::CV::ImageProcess> pretreat(
                 MNN::CV::ImageProcess::create(MNN::CV::RGB, MNN::CV::RGB, mean_vals, 3, norm_vals, 3));
         pretreat->convert(image.data, 416, 416, image.step[0], input_tensor);
-        my_interpreter->runSession(my_session);
 
+        auto end_togpu = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed_togpu = end_togpu - start_togpu;
+        std::cout << "data to gpu:" << elapsed_togpu.count() << " s, ";
+
+        auto start_infer = std::chrono::steady_clock::now();
+        my_interpreter->runSession(my_session);
+        auto end_infer = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed_infer = end_infer - start_infer;
+        std::cout << "inference time :" << elapsed_infer.count() << " s, ";
+
+        auto start_tocpu = std::chrono::steady_clock::now();
         // "boxes" -- [batch, num, 1, 4] ; "confs" -- [batch, num, num_classes]
         auto output_tensor_boxes = my_interpreter->getSessionOutput(my_session, "boxes");
 
@@ -240,11 +254,14 @@ int main(int argc, char **argv) {
         std::vector<float> output_vector_boxes{output_array_boxes, output_array_boxes + boxes * 4};
         std::vector<float> output_vector_confs{output_array_confs,
                                                output_array_confs + boxes * class_nums + class_nums};
+        auto end_tocpu = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed_tocpu = end_tocpu - start_tocpu;
+        std::cout << "cpu time:" << elapsed_tocpu.count() << " s, ";
 
         std::vector<std::vector<std::vector<float>>> vec(class_nums);
-        std::cout << "vec.size(): " << vec.size() << std::endl;
-        std::cout << std::endl;
-        std::cout << "bounding boxes" << std::endl;
+        // std::cout << "vec.size(): " << vec.size() << std::endl;
+        // std::cout << std::endl;
+        // std::cout << "bounding boxes" << std::endl;
 
         // filter bounding boxes by threshold(0.4)
         for (int num = 0; num < boxes; num++) {
@@ -266,16 +283,16 @@ int main(int argc, char **argv) {
                 std::vector<float> coord_vector(firstBoxes, lastBoxes);
                 coord_vector.push_back(max_prob);
 
-                for (int idx = 0; idx < 5; idx++) {
-                    std::cout << coord_vector.at(idx) << " ";
+                //for (int idx = 0; idx < 5; idx++) {
+                //    std::cout << coord_vector.at(idx) << " ";
 
-                }
-                std::cout << std::endl;
+                //}
+                //std::cout << std::endl;
                 vec.at(max_id).push_back(coord_vector);
             }
         }
 
-        // nms
+        //nms
         for (int cls_nms = 0; cls_nms < class_nums; cls_nms++) {
             if (vec.at(cls_nms).size() == 0) {
                 continue;
@@ -296,7 +313,6 @@ int main(int argc, char **argv) {
                 }
             }
         }
-
         std::vector<Object> objects;
         for (int cls_s = 0; cls_s < class_nums; cls_s++) {
             if (vec.at(cls_s).size() == 0) {
@@ -317,13 +333,8 @@ int main(int argc, char **argv) {
             }
         }
 
-//        auto imgshow = draw_objects(frame, objects);
-//        cv::imshow("w", imgshow);
-//        cv::waitKey(1);
     }
-    auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed1 = end - start1;
-    std::cout << "data to gpu:" << elapsed1.count() << " s, ";
+
 }
 
 void read_classes(char *string) {
@@ -336,5 +347,4 @@ void read_classes(char *string) {
     }
     class_nums = class_names.size();
 }
-
 
